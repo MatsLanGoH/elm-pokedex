@@ -10,14 +10,16 @@ import Html.Events exposing (onClick, onInput)
 ---- MODEL ----
 
 
-initial_model =
-    { query_string = ""
+initialModel =
+    { queryString = ""
+    , gotPokemon = False
     , pokemon = Pokemon "" 0 ""
     }
 
 
 type alias Model =
-    { query_string : String
+    { queryString : String
+    , gotPokemon : Bool
     , pokemon : Pokemon
     }
 
@@ -31,7 +33,7 @@ type alias Pokemon =
 
 init : ( Model, Cmd Msg )
 init =
-    ( initial_model, Cmd.none )
+    ( initialModel, Cmd.none )
 
 
 
@@ -47,7 +49,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         UpdateQuery newQuery ->
-            ( { model | query_string = newQuery }
+            ( { model | queryString = newQuery }
             , Cmd.none
             )
 
@@ -65,24 +67,33 @@ view model =
         [ img [ src "/logo.svg" ] []
         , h1 [] [ text "Elm Pokédex" ]
         , viewSearchBox model
-        , viewPokemon model.pokemon
+        , viewResult model
         ]
 
 
 viewSearchBox model =
     div []
-        [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.query_string, onInput UpdateQuery ] []
+        [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.queryString, onInput UpdateQuery ] []
         , button [ onClick SubmitQuery ] [ text "Search" ]
         ]
 
 
-viewPokemon pokemon =
-    div []
-        [ h1 [] [ text "Result" ]
-        , p [] [ text pokemon.name ]
-        , p [] [ text ("id: " ++ String.fromInt pokemon.id) ]
-        , p [] [ text ("type: " ++ pokemon.type_1) ]
-        ]
+viewResult model =
+    if model.gotPokemon == True then
+        let
+            pokemon =
+                model.pokemon
+        in
+        div []
+            [ h1 [] [ text "Result" ]
+            , p [] [ text ("name" ++ pokemon.name) ]
+            , p [] [ text ("id: " ++ String.fromInt pokemon.id) ]
+            , p [] [ text ("type: " ++ pokemon.type_1) ]
+            ]
+
+    else
+        div []
+            [ h1 [] [ text "Nothing found" ] ]
 
 
 
