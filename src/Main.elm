@@ -1,10 +1,11 @@
-module Main exposing (..)
+module Main exposing (main)
 
 import Browser
 import Html exposing (Html, button, code, div, h1, img, input, p, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
-import Http
+import Http exposing (Error(..))
+import Json.Decode exposing (Decoder, field, int, map3, string)
 
 
 
@@ -23,7 +24,6 @@ baseApiUrl =
 initialModel : Model
 initialModel =
     { queryString = ""
-    , gotPokemon = False
     , pokemon = Pokemon "" 0 ""
     , apiResultStatus = NotLoaded
     }
@@ -31,7 +31,6 @@ initialModel =
 
 type alias Model =
     { queryString : String
-    , gotPokemon : Bool
     , pokemon : Pokemon
     , apiResultStatus : ApiResultStatus
     }
@@ -40,14 +39,22 @@ type alias Model =
 type alias Pokemon =
     { name : String
     , id : Int
-    , type_1 : String
+    , sprite_front_default_url : String
     }
+
+
+pokemonDecoder : Decoder Pokemon
+pokemonDecoder =
+    map3 Pokemon
+        (field "name" string)
+        (field "id" int)
+        (field "sprites" (field "front_default" string))
 
 
 type ApiResultStatus
     = NotLoaded
     | Loading
-    | Failure
+    | Failure String
     | Success String
 
 
@@ -63,7 +70,7 @@ init =
 type Msg
     = UpdateQuery String
     | SubmitQuery
-    | GotApiResponse (Result Http.Error String)
+    | GotPokemon (Result Http.Error Pokemon)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -76,19 +83,46 @@ update msg model =
 
         SubmitQuery ->
             ( { model | apiResultStatus = Loading }
-            , Http.get
-                { url = baseApiUrl ++ String.toLower model.queryString
-                , expect = Http.expectString GotApiResponse
-                }
+            , getPokemon model.queryString
             )
 
-        GotApiResponse result ->
+        GotPokemon result ->
             case result of
-                Ok resultText ->
-                    ( { model | apiResultStatus = Success resultText }, Cmd.none )
+                Ok pokemon ->
+                    ( { model | apiResultStatus = Success "OK", pokemon = pokemon }, Cmd.none )
 
-                Err _ ->
-                    ( { model | apiResultStatus = Failure }, Cmd.none )
+                Err error ->
+                    let
+                        message =
+                            case error of
+                                BadUrl url ->
+                                    "Invalid URL " ++ url
+
+                                Timeout ->
+                                    "Connection has timed out"
+
+                                NetworkError ->
+                                    "Unable to reach the server"
+
+                                BadStatus statusCode ->
+                                    "Status Error: " ++ String.fromInt statusCode
+
+                                BadBody errorMessage ->
+                                    errorMessage
+                    in
+                    ( { model | apiResultStatus = Failure message }, Cmd.none )
+
+
+
+---- HTTP ----
+
+
+getPokemon : String -> Cmd Msg
+getPokemon queryString =
+    Http.get
+        { url = baseApiUrl ++ String.toLower queryString
+        , expect = Http.expectJson GotPokemon pokemonDecoder
+        }
 
 
 
@@ -125,8 +159,11 @@ viewApiResultStatus model =
                 Loading ->
                     text "検索中だYo..."
 
-                Failure ->
-                    text "失敗したYo :-("
+                Failure err ->
+                    div []
+                        [ p [] [ text "失敗したYo :-(" ]
+                        , code [] [ text err ]
+                        ]
 
                 Success result ->
                     div []
@@ -142,21 +179,28 @@ viewApiResultStatus model =
 
 viewResult : Model -> Html msg
 viewResult model =
-    if model.gotPokemon == True then
-        let
-            pokemon =
-                model.pokemon
-        in
-        div []
-            [ h1 [] [ text "Result" ]
-            , p [] [ text ("name" ++ pokemon.name) ]
-            , p [] [ text ("id: " ++ String.fromInt pokemon.id) ]
-            , p [] [ text ("type: " ++ pokemon.type_1) ]
-            ]
+    case model.apiResultStatus of
+        Success _ ->
+            let
+                pokemon =
+                    model.pokemon
+            in
+            div []
+                [ h1 [] [ text "Result" ]
+                , p []
+                    [ text
+                        (String.toUpper pokemon.name
+                            ++ " (#"
+                            ++ String.fromInt pokemon.id
+                            ++ ")"
+                        )
+                    ]
+                , img [ src pokemon.sprite_front_default_url ] []
+                ]
 
-    else
-        div []
-            [ h1 [] [ text "Nothing found" ] ]
+        _ ->
+            div []
+                [ h1 [] [ text "Nothing found" ] ]
 
 
 
