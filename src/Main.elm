@@ -1,19 +1,31 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, button, div, h1, img, input, p, text)
+import Html exposing (Html, button, code, div, h1, img, input, p, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
+import Http
+
+
+
+---- CONFIG ----
+
+
+baseApiUrl : String
+baseApiUrl =
+    "https://pokeapi.co/api/v2/pokemon/"
 
 
 
 ---- MODEL ----
 
 
+initialModel : Model
 initialModel =
     { queryString = ""
     , gotPokemon = False
     , pokemon = Pokemon "" 0 ""
+    , apiResultStatus = NotLoaded
     }
 
 
@@ -21,6 +33,7 @@ type alias Model =
     { queryString : String
     , gotPokemon : Bool
     , pokemon : Pokemon
+    , apiResultStatus : ApiResultStatus
     }
 
 
@@ -29,6 +42,13 @@ type alias Pokemon =
     , id : Int
     , type_1 : String
     }
+
+
+type ApiResultStatus
+    = NotLoaded
+    | Loading
+    | Failure
+    | Success String
 
 
 init : ( Model, Cmd Msg )
@@ -43,6 +63,7 @@ init =
 type Msg
     = UpdateQuery String
     | SubmitQuery
+    | GotApiResponse (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -54,7 +75,20 @@ update msg model =
             )
 
         SubmitQuery ->
-            Debug.todo "Add Query submission"
+            ( { model | apiResultStatus = Loading }
+            , Http.get
+                { url = baseApiUrl ++ String.toLower model.queryString
+                , expect = Http.expectString GotApiResponse
+                }
+            )
+
+        GotApiResponse result ->
+            case result of
+                Ok resultText ->
+                    ( { model | apiResultStatus = Success resultText }, Cmd.none )
+
+                Err _ ->
+                    ( { model | apiResultStatus = Failure }, Cmd.none )
 
 
 
@@ -67,10 +101,12 @@ view model =
         [ img [ src "/logo.svg" ] []
         , h1 [] [ text "Elm Pokédex" ]
         , viewSearchBox model
+        , viewApiResultStatus model
         , viewResult model
         ]
 
 
+viewSearchBox : Model -> Html Msg
 viewSearchBox model =
     div []
         [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.queryString, onInput UpdateQuery ] []
@@ -78,6 +114,33 @@ viewSearchBox model =
         ]
 
 
+viewApiResultStatus : Model -> Html msg
+viewApiResultStatus model =
+    let
+        apiResultStatusItem =
+            case model.apiResultStatus of
+                NotLoaded ->
+                    text "まだ何も検索していないYo"
+
+                Loading ->
+                    text "検索中だYo..."
+
+                Failure ->
+                    text "失敗したYo :-("
+
+                Success result ->
+                    div []
+                        [ p [] [ text "見つけたYo :)" ]
+                        , code [] [ text result ]
+                        ]
+    in
+    div []
+        [ h1 [] [ text "検索ステータス" ]
+        , apiResultStatusItem
+        ]
+
+
+viewResult : Model -> Html msg
 viewResult model =
     if model.gotPokemon == True then
         let
