@@ -75,7 +75,12 @@ update msg model =
             )
 
         SubmitQuery ->
-            Debug.todo "Add Query submission"
+            ( { model | apiResultStatus = Loading }
+            , Http.get
+                { url = baseApiUrl ++ model.queryString
+                , expect = Http.expectString GotApiResponse
+                }
+            )
 
         GotApiResponse result ->
             case result of
@@ -123,8 +128,8 @@ viewApiResultStatus model =
                 Failure ->
                     "失敗したYo :-("
 
-                Success _ ->
-                    "見つけたYo :)"
+                Success result ->
+                    "見つけたYo :)" ++ result
     in
     div []
         [ h1 [] [ text "検索ステータス" ]
