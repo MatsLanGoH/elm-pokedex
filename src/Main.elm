@@ -8,13 +8,24 @@ import Http
 
 
 
+---- CONFIG ----
+
+
+baseApiUrl : String
+baseApiUrl =
+    "https://pokeapi.co/api/v2/pokemon/"
+
+
+
 ---- MODEL ----
 
 
+initialModel : Model
 initialModel =
     { queryString = ""
     , gotPokemon = False
     , pokemon = Pokemon "" 0 ""
+    , apiResultStatus = NotLoaded
     }
 
 
@@ -22,6 +33,7 @@ type alias Model =
     { queryString : String
     , gotPokemon : Bool
     , pokemon : Pokemon
+    , apiResultStatus : ApiResultStatus
     }
 
 
@@ -30,6 +42,13 @@ type alias Pokemon =
     , id : Int
     , type_1 : String
     }
+
+
+type ApiResultStatus
+    = NotLoaded
+    | Loading
+    | Failure
+    | Success String
 
 
 init : ( Model, Cmd Msg )
@@ -60,11 +79,11 @@ update msg model =
 
         GotApiResponse result ->
             case result of
-                Ok responseText ->
-                    ( Success responseText, Cmd.none )
+                Ok resultText ->
+                    ( { model | apiResultStatus = Success resultText }, Cmd.none )
 
                 Err _ ->
-                    ( Failure, Cmd.none )
+                    ( { model | apiResultStatus = Failure }, Cmd.none )
 
 
 
@@ -77,10 +96,12 @@ view model =
         [ img [ src "/logo.svg" ] []
         , h1 [] [ text "Elm Pokédex" ]
         , viewSearchBox model
+        , viewApiResultStatus model
         , viewResult model
         ]
 
 
+viewSearchBox : Model -> Html Msg
 viewSearchBox model =
     div []
         [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.queryString, onInput UpdateQuery ] []
@@ -88,6 +109,30 @@ viewSearchBox model =
         ]
 
 
+viewApiResultStatus : Model -> Html msg
+viewApiResultStatus model =
+    let
+        apiResultStatusText =
+            case model.apiResultStatus of
+                NotLoaded ->
+                    "まだ何も検索していないYo"
+
+                Loading ->
+                    "検索中だYo..."
+
+                Failure ->
+                    "失敗したYo :-("
+
+                Success _ ->
+                    "見つけたYo :)"
+    in
+    div []
+        [ h1 [] [ text "検索ステータス" ]
+        , text apiResultStatusText
+        ]
+
+
+viewResult : Model -> Html msg
 viewResult model =
     if model.gotPokemon == True then
         let
