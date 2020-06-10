@@ -1,7 +1,7 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, button, div, h1, img, input, p, text)
+import Html exposing (Html, button, code, div, h1, img, input, p, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -77,7 +77,7 @@ update msg model =
         SubmitQuery ->
             ( { model | apiResultStatus = Loading }
             , Http.get
-                { url = baseApiUrl ++ model.queryString
+                { url = baseApiUrl ++ String.toLower model.queryString
                 , expect = Http.expectString GotApiResponse
                 }
             )
@@ -117,23 +117,26 @@ viewSearchBox model =
 viewApiResultStatus : Model -> Html msg
 viewApiResultStatus model =
     let
-        apiResultStatusText =
+        apiResultStatusItem =
             case model.apiResultStatus of
                 NotLoaded ->
-                    "まだ何も検索していないYo"
+                    text "まだ何も検索していないYo"
 
                 Loading ->
-                    "検索中だYo..."
+                    text "検索中だYo..."
 
                 Failure ->
-                    "失敗したYo :-("
+                    text "失敗したYo :-("
 
                 Success result ->
-                    "見つけたYo :)" ++ result
+                    div []
+                        [ p [] [ text "見つけたYo :)" ]
+                        , code [] [ text result ]
+                        ]
     in
     div []
         [ h1 [] [ text "検索ステータス" ]
-        , text apiResultStatusText
+        , apiResultStatusItem
         ]
 
 
