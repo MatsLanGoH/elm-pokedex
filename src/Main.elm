@@ -4,6 +4,7 @@ import Browser
 import Html exposing (Html, button, div, h1, img, input, p, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
+import Http
 
 
 
@@ -43,6 +44,7 @@ init =
 type Msg
     = UpdateQuery String
     | SubmitQuery
+    | GotApiResponse (Result Http.Error String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -55,6 +57,14 @@ update msg model =
 
         SubmitQuery ->
             Debug.todo "Add Query submission"
+
+        GotApiResponse result ->
+            case result of
+                Ok responseText ->
+                    ( Success responseText, Cmd.none )
+
+                Err _ ->
+                    ( Failure, Cmd.none )
 
 
 
