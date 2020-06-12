@@ -5,7 +5,7 @@ import Html exposing (Html, button, code, div, h1, img, input, p, text)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Http exposing (Error(..))
-import Json.Decode exposing (Decoder, field, int, map3, string)
+import Json.Decode as Decode exposing (Decoder, at, field, int, list, map, map3, string)
 
 
 
@@ -24,31 +24,62 @@ baseApiUrl =
 initialModel : Model
 initialModel =
     { queryString = ""
-    , pokemon = Pokemon "" 0 ""
+    , pokemon = PokemonDetail "" 0 ""
+    , pokemons = []
     , apiResultStatus = NotLoaded
     }
 
 
 type alias Model =
     { queryString : String
-    , pokemon : Pokemon
+    , pokemon : PokemonDetail
+    , pokemons : List PokemonSimple
     , apiResultStatus : ApiResultStatus
     }
 
 
-type alias Pokemon =
+type alias PokemonDetail =
     { name : String
     , id : Int
     , sprite_front_default_url : String
     }
 
 
-pokemonDecoder : Decoder Pokemon
-pokemonDecoder =
-    map3 Pokemon
+type alias PokemonSimple =
+    { name : String
+    , url : String
+    }
+
+
+type alias PokemonAll =
+    { count : Int
+    , results : List PokemonSimple
+    }
+
+
+pokemonDetailDecoder : Decoder PokemonDetail
+pokemonDetailDecoder =
+    Decode.map3
+        PokemonDetail
         (field "name" string)
         (field "id" int)
-        (field "sprites" (field "front_default" string))
+        (at [ "sprites", "front_default" ] string)
+
+
+pokemonSimpleDecoder : Decoder PokemonSimple
+pokemonSimpleDecoder =
+    Decode.map2
+        PokemonSimple
+        (field "name" string)
+        (field "url" string)
+
+
+pokemonAllDecoder : Decoder PokemonAll
+pokemonAllDecoder =
+    Decode.map2
+        PokemonAll
+        (field "count" int)
+        (field "results" (Decode.list pokemonSimpleDecoder))
 
 
 type ApiResultStatus
@@ -70,7 +101,9 @@ init =
 type Msg
     = UpdateQuery String
     | SubmitQuery
-    | GotPokemon (Result Http.Error Pokemon)
+    | SearchAll
+    | GotPokemonDetail (Result Http.Error PokemonDetail)
+    | GotPokemons (Result Http.Error PokemonAll)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -82,14 +115,32 @@ update msg model =
             )
 
         SubmitQuery ->
-            ( { model | apiResultStatus = Loading }
-            , getPokemon model.queryString
+            ( { model
+                | pokemon = PokemonDetail "" 0 ""
+                , pokemons = []
+                , apiResultStatus = Loading
+              }
+            , getPokemonDetail model.queryString
             )
 
-        GotPokemon result ->
+        SearchAll ->
+            ( { model
+                | pokemon = PokemonDetail "" 0 ""
+                , pokemons = []
+                , apiResultStatus = Loading
+              }
+            , getPokemons
+            )
+
+        GotPokemonDetail result ->
             case result of
                 Ok pokemon ->
-                    ( { model | apiResultStatus = Success "OK", pokemon = pokemon }, Cmd.none )
+                    ( { model
+                        | apiResultStatus = Success "OK"
+                        , pokemon = pokemon
+                      }
+                    , Cmd.none
+                    )
 
                 Err error ->
                     let
@@ -112,16 +163,59 @@ update msg model =
                     in
                     ( { model | apiResultStatus = Failure message }, Cmd.none )
 
+        GotPokemons result ->
+            case result of
+                Ok pokemons ->
+                    ( { model
+                        | apiResultStatus = Success "OK"
+                        , pokemons = pokemons.results
+                      }
+                    , Cmd.none
+                    )
+
+                Err error ->
+                    let
+                        message =
+                            case error of
+                                BadUrl url ->
+                                    "Invalid URL " ++ url
+
+                                Timeout ->
+                                    "Connection has timed out"
+
+                                NetworkError ->
+                                    "Unable to reach the server"
+
+                                BadStatus statusCode ->
+                                    "Status Error: " ++ String.fromInt statusCode
+
+                                BadBody errorMessage ->
+                                    errorMessage
+                    in
+                    ( { model
+                        | apiResultStatus = Failure message
+                      }
+                    , Cmd.none
+                    )
+
 
 
 ---- HTTP ----
 
 
-getPokemon : String -> Cmd Msg
-getPokemon queryString =
+getPokemonDetail : String -> Cmd Msg
+getPokemonDetail queryString =
     Http.get
         { url = baseApiUrl ++ String.toLower queryString
-        , expect = Http.expectJson GotPokemon pokemonDecoder
+        , expect = Http.expectJson GotPokemonDetail pokemonDetailDecoder
+        }
+
+
+getPokemons : Cmd Msg
+getPokemons =
+    Http.get
+        { url = baseApiUrl
+        , expect = Http.expectJson GotPokemons pokemonAllDecoder
         }
 
 
@@ -142,9 +236,18 @@ view model =
 
 viewSearchBox : Model -> Html Msg
 viewSearchBox model =
+    let
+        searchButton =
+            case String.length model.queryString of
+                0 ->
+                    button [ onClick SearchAll ] [ text "Search all" ]
+
+                _ ->
+                    button [ onClick SubmitQuery ] [ text "Search one" ]
+    in
     div []
         [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.queryString, onInput UpdateQuery ] []
-        , button [ onClick SubmitQuery ] [ text "Search" ]
+        , searchButton
         ]
 
 
@@ -184,18 +287,33 @@ viewResult model =
             let
                 pokemon =
                     model.pokemon
+
+                viewPokemon =
+                    if String.length pokemon.name > 0 then
+                        div []
+                            [ p []
+                                [ text
+                                    (String.toUpper pokemon.name
+                                        ++ " (#"
+                                        ++ String.fromInt pokemon.id
+                                        ++ ")"
+                                    )
+                                ]
+                            , img [ src pokemon.sprite_front_default_url ] []
+                            ]
+
+                    else
+                        div [] []
+
+                viewPokemonList =
+                    model.pokemons
+                        |> List.map (\m -> p [] [ text m.name ])
+                        |> div []
             in
             div []
                 [ h1 [] [ text "Result" ]
-                , p []
-                    [ text
-                        (String.toUpper pokemon.name
-                            ++ " (#"
-                            ++ String.fromInt pokemon.id
-                            ++ ")"
-                        )
-                    ]
-                , img [ src pokemon.sprite_front_default_url ] []
+                , viewPokemon
+                , viewPokemonList
                 ]
 
         _ ->
