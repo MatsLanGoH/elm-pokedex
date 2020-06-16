@@ -2,10 +2,11 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (Html, button, code, div, h1, img, input, p, text)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, placeholder, src, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http exposing (Error(..))
-import Json.Decode as Decode exposing (Decoder, at, field, int, list, map, map3, string)
+import Json.Decode as Decode exposing (Decoder, at, decodeString, field, int, list, map, map3, string, succeed)
+import Json.Decode.Pipeline exposing (optional, required)
 
 
 
@@ -57,29 +58,34 @@ type alias PokemonAll =
     }
 
 
+pokemonSpriteDecoder : Decoder String
+pokemonSpriteDecoder =
+    field "front_default" string
+
+
 pokemonDetailDecoder : Decoder PokemonDetail
 pokemonDetailDecoder =
-    Decode.map3
+    Decode.succeed
         PokemonDetail
-        (field "name" string)
-        (field "id" int)
-        (at [ "sprites", "front_default" ] string)
+        |> required "name" string
+        |> required "id" int
+        |> required "sprites" pokemonSpriteDecoder
 
 
 pokemonSimpleDecoder : Decoder PokemonSimple
 pokemonSimpleDecoder =
-    Decode.map2
+    Decode.succeed
         PokemonSimple
-        (field "name" string)
-        (field "url" string)
+        |> required "name" string
+        |> required "url" string
 
 
 pokemonAllDecoder : Decoder PokemonAll
 pokemonAllDecoder =
-    Decode.map2
+    Decode.succeed
         PokemonAll
-        (field "count" int)
-        (field "results" (Decode.list pokemonSimpleDecoder))
+        |> required "count" int
+        |> required "results" (Decode.list pokemonSimpleDecoder)
 
 
 type ApiResultStatus
