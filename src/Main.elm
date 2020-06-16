@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, code, div, h1, img, input, p, text)
+import Html exposing (Html, button, code, div, h1, h2, img, input, p, text)
 import Html.Attributes exposing (class, placeholder, src, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http exposing (Error(..))
@@ -25,10 +25,18 @@ baseApiUrl =
 initialModel : Model
 initialModel =
     { queryString = ""
-    , pokemon = PokemonDetail "" 0 ""
+    , pokemon = initialPokemon
     , pokemons = []
     , apiResultStatus = NotLoaded
     }
+
+
+initialPokemon : PokemonDetail
+initialPokemon =
+    PokemonDetail
+        ""
+        0
+        (PokemonSprite "" "" "" "" "" "" "" "")
 
 
 type alias Model =
@@ -42,7 +50,19 @@ type alias Model =
 type alias PokemonDetail =
     { name : String
     , id : Int
-    , sprite_front_default_url : String
+    , sprites : PokemonSprite
+    }
+
+
+type alias PokemonSprite =
+    { front_default : String
+    , back_default : String
+    , front_female : String
+    , back_female : String
+    , front_shiny : String
+    , back_shiny : String
+    , front_shiny_female : String
+    , back_shiny_female : String
     }
 
 
@@ -58,9 +78,18 @@ type alias PokemonAll =
     }
 
 
-pokemonSpriteDecoder : Decoder String
+pokemonSpriteDecoder : Decoder PokemonSprite
 pokemonSpriteDecoder =
-    field "front_default" string
+    Decode.succeed
+        PokemonSprite
+        |> required "front_default" string
+        |> required "back_default" string
+        |> required "front_female" string
+        |> required "back_female" string
+        |> required "front_shiny" string
+        |> required "back_shiny" string
+        |> required "front_shiny_female" string
+        |> required "back_shiny_female" string
 
 
 pokemonDetailDecoder : Decoder PokemonDetail
@@ -122,7 +151,7 @@ update msg model =
 
         SubmitQuery ->
             ( { model
-                | pokemon = PokemonDetail "" 0 ""
+                | pokemon = initialPokemon
                 , pokemons = []
                 , apiResultStatus = Loading
               }
@@ -131,7 +160,7 @@ update msg model =
 
         SearchAll ->
             ( { model
-                | pokemon = PokemonDetail "" 0 ""
+                | pokemon = initialPokemon
                 , pokemons = []
                 , apiResultStatus = Loading
               }
@@ -294,6 +323,9 @@ viewResult model =
                 pokemon =
                     model.pokemon
 
+                sprites =
+                    model.pokemon.sprites
+
                 viewPokemon =
                     if String.length pokemon.name > 0 then
                         div []
@@ -305,7 +337,26 @@ viewResult model =
                                         ++ ")"
                                     )
                                 ]
-                            , img [ src pokemon.sprite_front_default_url ] []
+                            , div []
+                                [ h2 [] [ text "Male" ]
+                                , img [ src sprites.front_default ] []
+                                , img [ src sprites.back_default ] []
+                                ]
+                            , div []
+                                [ h2 [] [ text "Female" ]
+                                , img [ src sprites.front_female ] []
+                                , img [ src sprites.back_female ] []
+                                ]
+                            , div []
+                                [ h2 [] [ text "Shiny Male" ]
+                                , img [ src sprites.front_shiny ] []
+                                , img [ src sprites.back_shiny ] []
+                                ]
+                            , div []
+                                [ h2 [] [ text "Shiny Female" ]
+                                , img [ src sprites.front_shiny_female ] []
+                                , img [ src sprites.back_shiny_female ] []
+                                ]
                             ]
 
                     else
