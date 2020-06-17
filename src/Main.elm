@@ -67,6 +67,7 @@ type alias PokemonSimple =
     }
 
 
+
 type alias PokemonAll =
     { count : Int
     , results : List PokemonSimple
