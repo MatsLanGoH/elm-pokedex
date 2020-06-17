@@ -1,12 +1,12 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, code, div, h1, h2, img, input, p, text)
+import Html exposing (Html, button, code, div, h1, h2, h3, img, input, p, table, td, text, tr)
 import Html.Attributes exposing (class, placeholder, src, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http exposing (Error(..))
-import Json.Decode as Decode exposing (Decoder, at, decodeString, field, int, list, map, map3, string, succeed)
-import Json.Decode.Pipeline exposing (optional, required)
+import Json.Decode as Decode exposing (Decoder, int, list, string, succeed)
+import Json.Decode.Pipeline exposing (hardcoded, required)
 
 
 
@@ -25,44 +25,39 @@ baseApiUrl =
 initialModel : Model
 initialModel =
     { queryString = ""
-    , pokemon = initialPokemon
+    , pokemon = NoPokemon
     , pokemons = []
     , apiResultStatus = NotLoaded
     }
 
 
-initialPokemon : PokemonDetail
-initialPokemon =
-    PokemonDetail
-        ""
-        0
-        (PokemonSprite "" "" "" "" "" "" "" "")
-
-
 type alias Model =
     { queryString : String
-    , pokemon : PokemonDetail
+    , pokemon : Pokemon
     , pokemons : List PokemonSimple
     , apiResultStatus : ApiResultStatus
     }
 
 
+type Pokemon
+    = HasPokemon PokemonDetail
+    | NoPokemon
+
+
 type alias PokemonDetail =
     { name : String
     , id : Int
-    , sprites : PokemonSprite
+    , defaultMaleSprite : Maybe PokemonSprite
+    , defaultFemaleSprite : Maybe PokemonSprite
+    , shinyMaleSprite : Maybe PokemonSprite
+    , shinyFemaleSprite : Maybe PokemonSprite
     }
 
 
 type alias PokemonSprite =
-    { front_default : String
-    , back_default : String
-    , front_female : String
-    , back_female : String
-    , front_shiny : String
-    , back_shiny : String
-    , front_shiny_female : String
-    , back_shiny_female : String
+    { frontUrl : String
+    , backUrl : String
+    , spriteType : String
     }
 
 
@@ -78,18 +73,24 @@ type alias PokemonAll =
     }
 
 
-pokemonSpriteDecoder : Decoder PokemonSprite
-pokemonSpriteDecoder =
-    Decode.succeed
-        PokemonSprite
-        |> required "front_default" string
-        |> required "back_default" string
-        |> required "front_female" string
-        |> required "back_female" string
-        |> required "front_shiny" string
-        |> required "back_shiny" string
-        |> required "front_shiny_female" string
-        |> required "back_shiny_female" string
+pokemonSpriteDecoder : String -> Decoder (Maybe PokemonSprite)
+pokemonSpriteDecoder str =
+    let
+        front_selector =
+            "front_" ++ str
+
+        back_selector =
+            "back_" ++ str
+    in
+    Decode.oneOf
+        [ Decode.map Just
+            (Decode.succeed PokemonSprite
+                |> required front_selector string
+                |> required back_selector string
+                |> hardcoded str
+            )
+        , Decode.succeed Nothing
+        ]
 
 
 pokemonDetailDecoder : Decoder PokemonDetail
@@ -98,7 +99,10 @@ pokemonDetailDecoder =
         PokemonDetail
         |> required "name" string
         |> required "id" int
-        |> required "sprites" pokemonSpriteDecoder
+        |> required "sprites" (pokemonSpriteDecoder "default")
+        |> required "sprites" (pokemonSpriteDecoder "shiny")
+        |> required "sprites" (pokemonSpriteDecoder "female")
+        |> required "sprites" (pokemonSpriteDecoder "shiny_female")
 
 
 pokemonSimpleDecoder : Decoder PokemonSimple
@@ -151,7 +155,7 @@ update msg model =
 
         SubmitQuery ->
             ( { model
-                | pokemon = initialPokemon
+                | pokemon = NoPokemon
                 , pokemons = []
                 , apiResultStatus = Loading
               }
@@ -160,7 +164,7 @@ update msg model =
 
         SearchAll ->
             ( { model
-                | pokemon = initialPokemon
+                | pokemon = NoPokemon
                 , pokemons = []
                 , apiResultStatus = Loading
               }
@@ -172,7 +176,7 @@ update msg model =
                 Ok pokemon ->
                     ( { model
                         | apiResultStatus = Success "OK"
-                        , pokemon = pokemon
+                        , pokemon = HasPokemon pokemon
                       }
                     , Cmd.none
                     )
@@ -319,63 +323,89 @@ viewResult : Model -> Html msg
 viewResult model =
     case model.apiResultStatus of
         Success _ ->
-            let
-                pokemon =
-                    model.pokemon
-
-                sprites =
-                    model.pokemon.sprites
-
-                viewPokemon =
-                    if String.length pokemon.name > 0 then
-                        div []
-                            [ p []
-                                [ text
-                                    (String.toUpper pokemon.name
-                                        ++ " (#"
-                                        ++ String.fromInt pokemon.id
-                                        ++ ")"
-                                    )
-                                ]
-                            , div []
-                                [ h2 [] [ text "Male" ]
-                                , img [ src sprites.front_default ] []
-                                , img [ src sprites.back_default ] []
-                                ]
-                            , div []
-                                [ h2 [] [ text "Female" ]
-                                , img [ src sprites.front_female ] []
-                                , img [ src sprites.back_female ] []
-                                ]
-                            , div []
-                                [ h2 [] [ text "Shiny Male" ]
-                                , img [ src sprites.front_shiny ] []
-                                , img [ src sprites.back_shiny ] []
-                                ]
-                            , div []
-                                [ h2 [] [ text "Shiny Female" ]
-                                , img [ src sprites.front_shiny_female ] []
-                                , img [ src sprites.back_shiny_female ] []
-                                ]
-                            ]
-
-                    else
-                        div [] []
-
-                viewPokemonList =
-                    model.pokemons
-                        |> List.map (\m -> p [] [ text m.name ])
-                        |> div []
-            in
             div []
                 [ h1 [] [ text "Result" ]
-                , viewPokemon
-                , viewPokemonList
+                , viewPokemon model.pokemon
+                , viewPokemonList model.pokemons
                 ]
 
         _ ->
+            text ""
+
+
+
+---- Pokemon Views -----
+
+
+viewPokemon : Pokemon -> Html msg
+viewPokemon pokemon =
+    case pokemon of
+        HasPokemon pokemonDetail ->
+            let
+                sprites =
+                    [ pokemonDetail.defaultMaleSprite
+                    , pokemonDetail.defaultFemaleSprite
+                    , pokemonDetail.shinyMaleSprite
+                    , pokemonDetail.shinyFemaleSprite
+                    ]
+                        |> List.filterMap identity
+
+                viewSprites =
+                    if List.length sprites > 0 then
+                        let
+                            spritesTable =
+                                sprites
+                                    |> List.map
+                                        (\s ->
+                                            tr []
+                                                [ td []
+                                                    [ h3 []
+                                                        [ s.spriteType
+                                                            |> String.split "_"
+                                                            |> List.map String.toUpper
+                                                            |> String.join " "
+                                                            |> text
+                                                        ]
+                                                    ]
+                                                , td [] [ img [ src s.frontUrl ] [] ]
+                                                , td [] [ img [ src s.backUrl ] [] ]
+                                                ]
+                                        )
+                                    |> table [ class "center" ]
+                        in
+                        div []
+                            [ h3 []
+                                [ "Sprites for "
+                                    ++ String.toUpper pokemonDetail.name
+                                    |> text
+                                ]
+                            , spritesTable
+                            ]
+
+                    else
+                        div [] [ h3 [] [ text "No sprites for this Pokemon found." ] ]
+            in
             div []
-                [ h1 [] [ text "Nothing found" ] ]
+                [ h2 [] [ text "Pokemon Details" ]
+                , p []
+                    [ String.toUpper pokemonDetail.name
+                        ++ " (#"
+                        ++ String.fromInt pokemonDetail.id
+                        ++ ")"
+                        |> text
+                    ]
+                , viewSprites
+                ]
+
+        NoPokemon ->
+            text ""
+
+
+viewPokemonList : List PokemonSimple -> Html msg
+viewPokemonList pokemons =
+    pokemons
+        |> List.map (\m -> p [] [ text m.name ])
+        |> div []
 
 
 
