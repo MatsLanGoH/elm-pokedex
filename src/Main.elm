@@ -7,6 +7,7 @@ import Html.Events exposing (onClick, onInput)
 import Http exposing (Error(..))
 import Json.Decode as Decode exposing (Decoder, int, list, string, succeed)
 import Json.Decode.Pipeline exposing (hardcoded, required)
+import Random
 
 
 
@@ -65,7 +66,6 @@ type alias PokemonSimple =
     { name : String
     , url : String
     }
-
 
 
 type alias PokemonAll =
@@ -142,6 +142,8 @@ type Msg
     = UpdateQuery String
     | SubmitQuery
     | SearchAll
+    | SurpriseMe
+    | NewPokemonId Int
     | GotPokemonDetail (Result Http.Error PokemonDetail)
     | GotPokemons (Result Http.Error PokemonAll)
 
@@ -170,6 +172,21 @@ update msg model =
                 , apiResultStatus = Loading
               }
             , getPokemons
+            )
+
+        SurpriseMe ->
+            ( model
+            , Random.generate NewPokemonId (Random.int 1 800)
+            )
+
+        NewPokemonId pokemonId ->
+            ( { model
+                | pokemon = NoPokemon
+                , pokemons = []
+                , apiResultStatus = Loading
+                , queryString = ""
+              }
+            , getPokemonDetail (String.fromInt pokemonId)
             )
 
         GotPokemonDetail result ->
@@ -284,10 +301,14 @@ viewSearchBox model =
 
                 _ ->
                     button [ onClick SubmitQuery ] [ text "Search one" ]
+
+        surpriseMe =
+            button [ onClick SurpriseMe ] [ text "Surprise me" ]
     in
     div []
         [ input [ type_ "text", placeholder "Enter a Pokémon name", value model.queryString, onInput UpdateQuery ] []
         , searchButton
+        , surpriseMe
         ]
 
 
