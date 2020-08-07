@@ -318,20 +318,20 @@ viewApiResultStatus model =
         apiResultStatusItem =
             case model.apiResultStatus of
                 NotLoaded ->
-                    text "まだ何も検索していないYo"
+                    text "まだ何も検索していないZe"
 
                 Loading ->
-                    text "検索中だYo..."
+                    text "検索中だZe..."
 
                 Failure err ->
                     div []
-                        [ p [] [ text "失敗したYo :-(" ]
+                        [ p [] [ text "失敗したZe :-(" ]
                         , code [] [ text err ]
                         ]
 
                 Success result ->
                     div []
-                        [ p [] [ text "見つけたYo :)" ]
+                        [ p [] [ text "見つけたZe :)" ]
                         , code [] [ text result ]
                         ]
     in
