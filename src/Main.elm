@@ -189,71 +189,27 @@ update msg model =
             , getPokemonDetail (String.fromInt pokemonId)
             )
 
-        GotPokemonDetail result ->
-            case result of
-                Ok pokemon ->
-                    ( { model
-                        | apiResultStatus = Success "OK"
-                        , pokemon = HasPokemon pokemon
-                      }
-                    , Cmd.none
-                    )
+        GotPokemonDetail (Ok pokemon) ->
+            ( { model
+                | apiResultStatus = Success "OK"
+                , pokemon = HasPokemon pokemon
+              }
+            , Cmd.none
+            )
 
-                Err error ->
-                    let
-                        message =
-                            case error of
-                                BadUrl url ->
-                                    "Invalid URL " ++ url
+        GotPokemonDetail (Err error) ->
+            handleErrors model error
 
-                                Timeout ->
-                                    "Connection has timed out"
+        GotPokemons (Ok pokemons) ->
+            ( { model
+                | apiResultStatus = Success "OK"
+                , pokemons = pokemons.results
+              }
+            , Cmd.none
+            )
 
-                                NetworkError ->
-                                    "Unable to reach the server"
-
-                                BadStatus statusCode ->
-                                    "Status Error: " ++ String.fromInt statusCode
-
-                                BadBody errorMessage ->
-                                    errorMessage
-                    in
-                    ( { model | apiResultStatus = Failure message }, Cmd.none )
-
-        GotPokemons result ->
-            case result of
-                Ok pokemons ->
-                    ( { model
-                        | apiResultStatus = Success "OK"
-                        , pokemons = pokemons.results
-                      }
-                    , Cmd.none
-                    )
-
-                Err error ->
-                    let
-                        message =
-                            case error of
-                                BadUrl url ->
-                                    "Invalid URL " ++ url
-
-                                Timeout ->
-                                    "Connection has timed out"
-
-                                NetworkError ->
-                                    "Unable to reach the server"
-
-                                BadStatus statusCode ->
-                                    "Status Error: " ++ String.fromInt statusCode
-
-                                BadBody errorMessage ->
-                                    errorMessage
-                    in
-                    ( { model
-                        | apiResultStatus = Failure message
-                      }
-                    , Cmd.none
-                    )
+        GotPokemons (Err error) ->
+            handleErrors model error
 
 
 
@@ -274,6 +230,29 @@ getPokemons =
         { url = baseApiUrl
         , expect = Http.expectJson GotPokemons pokemonAllDecoder
         }
+
+
+handleErrors : Model -> Error -> ( Model, Cmd Msg )
+handleErrors model error =
+    let
+        message =
+            case error of
+                BadUrl url ->
+                    "Invalid URL " ++ url
+
+                Timeout ->
+                    "Connection has timed out"
+
+                NetworkError ->
+                    "Unable to reach the server"
+
+                BadStatus statusCode ->
+                    "Status Error: " ++ String.fromInt statusCode
+
+                BadBody errorMessage ->
+                    errorMessage
+    in
+    ( { model | apiResultStatus = Failure message }, Cmd.none )
 
 
 
